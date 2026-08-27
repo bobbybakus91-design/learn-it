@@ -532,7 +532,8 @@ def ai_engine_status() -> dict[str, Any]:
         "model": GEMINI_MODEL,
         "features": len(AI_FEATURES),
         "entry_point": "run_ai",
-}    "AI Next-Lesson Recommender",
+},    AI_FEATURES = [
+    "AI Next-Lesson Recommender",
     "AI Exam Readiness Analyzer",
 
     "AI Lesson Generator",
