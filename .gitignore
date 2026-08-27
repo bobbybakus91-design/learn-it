@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+learn_it.db
+.env
+.venv/
+venv/
