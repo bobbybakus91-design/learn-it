@@ -1,40 +1,1007 @@
 # ============================================================
-# LEARN IT — AI ENGINE
+# LEARN IT — CORE ENGINE
 # ============================================================
-# Master AI engine for Learn It.
+# Non-AI core engine for Learn It.
 #
-# 170 registered Learn It capabilities:
-#   1-15   AI Core & Personalisation
-#   16-30  AI Learning
-#   31-40  AI Notes & Memory
-#   41-50  AI Quiz & Assessment
-#   51-55  AI Flashcards
-#   56-65  AI Competition & Games
-#   66-80  AI Past Questions
-#   81-95  AI Classroom
-#   96-115 Study Session Hub
-#   116-130 Learn It Study System
-#   131-145 Exam System
-#   146-155 Games & Battles
-#   156-170 Progress & Rewards
+# Works with:
+#     ai_engine.py
 #
-# Gemini is the AI provider.
+# The complete Learn It specification contains 170 capabilities.
+#
+# AI capabilities:
+#     1-95
+#
+# Core/platform systems:
+#     96-170
+#
+# This engine provides the data/state foundation for:
+#     - Study Session Hub
+#     - Study System
+#     - Exam System
+#     - Games & Battles
+#     - Progress & Rewards
+#     - Student profiles
+#     - Past-question source labels
 # ============================================================
 
 from __future__ import annotations
 
-import os
+from datetime import datetime, timezone
 from typing import Any, Optional
+from uuid import uuid4
 
-from google import genai
+from ai_engine import (
+    AI_FEATURES,
+    FEATURES,
+    FEATURE_IDS,
+    run_ai,
+    ai_engine_status,
+    health_check as ai_health_check,
+)
 
 
 # ============================================================
-# CONFIGURATION
+# ENGINE CONFIGURATION
 # ============================================================
 
-GEMINI_MODEL = os.getenv(
-    "GEMINI_MODEL",
+ENGINE_NAME = "Learn It Core Engine"
+ENGINE_VERSION = "1.0.0"
+
+TOTAL_FEATURES = 170
+
+
+# ============================================================
+# PLATFORM FEATURE GROUPS
+# ============================================================
+
+PLATFORM_FEATURES = {
+    # 96-115 — Study Session Hub
+    96: "Study Session Hub",
+    97: "Start Study Session",
+    98: "Continue Session",
+    99: "Quick Study",
+    100: "Deep Study",
+    101: "Quiet Study",
+    102: "AI Tutor Session",
+    103: "AI Classroom Session",
+    104: "Past-Question Session",
+    105: "Quiz Session",
+    106: "Flashcard Session",
+    107: "Practice Session",
+    108: "Timed Exam Session",
+    109: "Session Timer",
+    110: "Session Goals",
+    111: "Session Progress",
+    112: "Session Summary",
+    113: "Session Performance",
+    114: "AI Session Recommendations",
+    115: "XP/Rewards After Session",
+
+    # 116-130 — Learn It Study System
+    116: "Subject Dashboard",
+    117: "Topic Explorer",
+    118: "Lesson Viewer",
+    119: "Learning Materials",
+    120: "Saved Questions",
+    121: "Mistake Notebook",
+    122: "Personal Notes",
+    123: "Gaming Notes",
+    124: "Study Timetable",
+    125: "Study Reminders",
+    126: "Daily Study Goals",
+    127: "Study Streaks",
+    128: "Exam Countdown",
+    129: "Revision Mode",
+    130: "Exam Mode",
+
+    # 131-145 — Exam System
+    131: "WAEC",
+    132: "NECO",
+    133: "JAMB",
+    134: "BECE",
+    135: "Past-Question Database",
+    136: "Authorized Question Database",
+    137: "AI-Generated Practice Questions",
+    138: "Official-vs-AI Question Label",
+    139: "Timed Exams",
+    140: "Mock Exams",
+    141: "Automatic Marking",
+    142: "Detailed Explanations",
+    143: "Exam Results",
+    144: "Exam Performance Analytics",
+    145: "Weak-Topic Recommendations",
+
+    # 146-155 — Games & Battles
+    146: "Math Death Match",
+    147: "English Speed",
+    148: "Science Catastrophe",
+    149: "Flashcard War",
+    150: "STEM Competitions",
+    151: "Art Merge",
+    152: "Business Badge",
+    153: "Battle Arena",
+    154: "Challenge Mode",
+    155: "Competition Rooms",
+
+    # 156-170 — Progress & Rewards
+    156: "XP",
+    157: "Coins",
+    158: "Levels",
+    159: "Avatars",
+    160: "Avatar Upgrades",
+    161: "Achievements",
+    162: "Badges",
+    163: "Rewards",
+    164: "Leaderboard",
+    165: "Performance Ranking",
+    166: "Daily Challenges",
+    167: "Streak Rewards",
+    168: "Subject Statistics",
+    169: "Topic Mastery",
+    170: "Overall Progress Dashboard",
+}
+
+
+# ============================================================
+# SUBJECTS
+# ============================================================
+
+DEFAULT_SUBJECTS = [
+    "Mathematics",
+    "English",
+    "Biology",
+    "Chemistry",
+    "Physics",
+    "Geography",
+    "Computer Science",
+    "Further Mathematics",
+    "Technical Drawing",
+    "Literature",
+    "Government",
+    "Civic Education",
+    "Art",
+    "Accounting",
+    "Marketing",
+    "Economics",
+    "Commerce",
+]
+
+
+# ============================================================
+# EXAM BOARDS
+# ============================================================
+
+EXAM_BOARDS = {
+    "WAEC": "West African Examinations Council",
+    "NECO": "National Examinations Council",
+    "JAMB": "Joint Admissions and Matriculation Board",
+    "BECE": "Basic Education Certificate Examination",
+}
+
+
+# ============================================================
+# IN-MEMORY STORAGE
+# ============================================================
+# This is intentionally simple for the first backend version.
+# A database can replace these stores later without changing
+# the public engine interface.
+# ============================================================
+
+students: dict[str, dict[str, Any]] = {}
+study_sessions: dict[str, dict[str, Any]] = {}
+exams: dict[str, dict[str, Any]] = {}
+saved_questions: dict[str, list[dict[str, Any]]] = {}
+personal_notes: dict[str, list[dict[str, Any]]] = {}
+mistake_notebooks: dict[str, list[dict[str, Any]]] = {}
+games: dict[str, dict[str, Any]] = {}
+challenges: dict[str, dict[str, Any]] = {}
+
+
+# ============================================================
+# UTILITY FUNCTIONS
+# ============================================================
+
+def now_iso() -> str:
+    """Return the current UTC timestamp."""
+
+    return datetime.now(timezone.utc).isoformat()
+
+
+def new_id(prefix: str) -> str:
+    """Create a simple unique Learn It ID."""
+
+    return f"{prefix}_{uuid4().hex[:12]}"
+
+
+# ============================================================
+# STUDENT MANAGEMENT
+# ============================================================
+
+def create_student(
+    name: str = "Student",
+    grade: str = "JSS3",
+    curriculum: str = "Nigerian",
+    pathway: str = "General",
+) -> dict[str, Any]:
+    """Create a Learn It student profile."""
+
+    student_id = new_id("student")
+
+    student = {
+        "id": student_id,
+        "name": name,
+        "grade": grade,
+        "curriculum": curriculum,
+        "pathway": pathway,
+        "subjects": list(DEFAULT_SUBJECTS),
+        "weak_topics": [],
+        "strong_topics": [],
+        "recent_scores": [],
+        "learning_goals": [],
+        "xp": 0,
+        "coins": 0,
+        "level": 1,
+        "streak": 0,
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+
+    students[student_id] = student
+
+    return student
+
+
+def get_student(
+    student_id: str,
+) -> Optional[dict[str, Any]]:
+    """Return a student profile."""
+
+    return students.get(student_id)
+
+
+def update_student(
+    student_id: str,
+    updates: dict[str, Any],
+) -> dict[str, Any]:
+    """Update student profile information."""
+
+    student = students.get(student_id)
+
+    if student is None:
+        raise ValueError("Student not found.")
+
+    protected = {
+        "id",
+        "created_at",
+    }
+
+    for key, value in updates.items():
+        if key not in protected:
+            student[key] = value
+
+    student["updated_at"] = now_iso()
+
+    return student
+
+
+# ============================================================
+# AI CONNECTION
+# ============================================================
+
+def use_ai(
+    feature: str,
+    student_id: Optional[str],
+    request: str,
+) -> dict[str, Any]:
+    """Send a request from the core engine to the AI engine."""
+
+    student = None
+
+    if student_id:
+        student = get_student(student_id)
+
+        if student is None:
+            raise ValueError("Student not found.")
+
+    return run_ai(
+        feature=feature,
+        student=student,
+        request=request,
+    )
+
+
+# ============================================================
+# STUDY SESSION HUB — 96-115
+# ============================================================
+
+def start_study_session(
+    student_id: str,
+    session_type: str = "Quick Study",
+    subject: Optional[str] = None,
+    topic: Optional[str] = None,
+    goal: Optional[str] = None,
+) -> dict[str, Any]:
+    """Start a Learn It study session."""
+
+    if student_id not in students:
+        raise ValueError("Student not found.")
+
+    session_id = new_id("session")
+
+    session = {
+        "id": session_id,
+        "student_id": student_id,
+        "type": session_type,
+        "subject": subject,
+        "topic": topic,
+        "goal": goal,
+        "status": "active",
+        "started_at": now_iso(),
+        "ended_at": None,
+        "duration_seconds": 0,
+        "progress": 0,
+        "performance": None,
+        "summary": None,
+        "xp_earned": 0,
+        "coins_earned": 0,
+    }
+
+    study_sessions[session_id] = session
+
+    return session
+
+
+def get_study_session(
+    session_id: str,
+) -> Optional[dict[str, Any]]:
+    """Return a study session."""
+
+    return study_sessions.get(session_id)
+
+
+def update_session_progress(
+    session_id: str,
+    progress: int,
+) -> dict[str, Any]:
+    """Update study-session progress."""
+
+    session = study_sessions.get(session_id)
+
+    if session is None:
+        raise ValueError("Study session not found.")
+
+    session["progress"] = max(
+        0,
+        min(100, int(progress)),
+    )
+
+    return session
+
+
+def complete_study_session(
+    session_id: str,
+    performance: Optional[float] = None,
+    summary: Optional[str] = None,
+) -> dict[str, Any]:
+    """Complete a study session and award XP/coins."""
+
+    session = study_sessions.get(session_id)
+
+    if session is None:
+        raise ValueError("Study session not found.")
+
+    if session["status"] == "completed":
+        return session
+
+    session["status"] = "completed"
+    session["ended_at"] = now_iso()
+    session["progress"] = 100
+    session["performance"] = performance
+    session["summary"] = summary
+
+    xp = 50
+    coins = 10
+
+    if performance is not None:
+        if performance >= 80:
+            xp += 30
+            coins += 10
+        elif performance >= 50:
+            xp += 15
+            coins += 5
+
+    session["xp_earned"] = xp
+    session["coins_earned"] = coins
+
+    award_xp(
+        session["student_id"],
+        xp,
+    )
+
+    award_coins(
+        session["student_id"],
+        coins,
+    )
+
+    return session
+
+
+def get_session_recommendations(
+    student_id: str,
+) -> dict[str, Any]:
+    """Generate AI recommendations for the next study session."""
+
+    return use_ai(
+        feature="AI Session Recommendations",
+        student_id=student_id,
+        request=(
+            "Recommend the student's next study session "
+            "using their current learning context."
+        ),
+    )
+
+
+# ============================================================
+# STUDY SYSTEM — 116-130
+# ============================================================
+
+def get_subject_dashboard(
+    student_id: str,
+    subject: str,
+) -> dict[str, Any]:
+    """Return subject dashboard information."""
+
+    student = get_student(student_id)
+
+    if student is None:
+        raise ValueError("Student not found.")
+
+    return {
+        "student_id": student_id,
+        "subject": subject,
+        "weak_topics": student.get("weak_topics", []),
+        "strong_topics": student.get("strong_topics", []),
+        "recent_scores": student.get("recent_scores", []),
+        "topic_mastery": {},
+        "recommended": [],
+    }
+
+
+def get_topic_explorer(
+    student_id: str,
+    subject: str,
+) -> dict[str, Any]:
+    """Return topic-explorer information."""
+
+    return {
+        "student_id": student_id,
+        "subject": subject,
+        "topics": [],
+        "message": (
+            "Topics can be populated from the selected curriculum."
+        ),
+    }
+
+
+def save_question(
+    student_id: str,
+    question: dict[str, Any],
+) -> dict[str, Any]:
+    """Save a question for a student."""
+
+    saved_questions.setdefault(
+        student_id,
+        [],
+    ).append(question)
+
+    return question
+
+
+def get_saved_questions(
+    student_id: str,
+) -> list[dict[str, Any]]:
+    """Return saved questions."""
+
+    return saved_questions.get(
+        student_id,
+        [],
+    )
+
+
+def add_personal_note(
+    student_id: str,
+    note: str,
+    subject: Optional[str] = None,
+    topic: Optional[str] = None,
+) -> dict[str, Any]:
+    """Add a personal study note."""
+
+    item = {
+        "id": new_id("note"),
+        "student_id": student_id,
+        "subject": subject,
+        "topic": topic,
+        "note": note,
+        "created_at": now_iso(),
+    }
+
+    personal_notes.setdefault(
+        student_id,
+        [],
+    ).append(item)
+
+    return item
+
+
+def get_personal_notes(
+    student_id: str,
+) -> list[dict[str, Any]]:
+    """Return personal notes."""
+
+    return personal_notes.get(
+        student_id,
+        [],
+    )
+
+
+def add_mistake(
+    student_id: str,
+    question: str,
+    answer: Optional[str] = None,
+    correct_answer: Optional[str] = None,
+    subject: Optional[str] = None,
+    topic: Optional[str] = None,
+) -> dict[str, Any]:
+    """Add an item to the student's mistake notebook."""
+
+    item = {
+        "id": new_id("mistake"),
+        "student_id": student_id,
+        "question": question,
+        "answer": answer,
+        "correct_answer": correct_answer,
+        "subject": subject,
+        "topic": topic,
+        "created_at": now_iso(),
+    }
+
+    mistake_notebooks.setdefault(
+        student_id,
+        [],
+    ).append(item)
+
+    return item
+
+
+def get_mistakes(
+    student_id: str,
+) -> list[dict[str, Any]]:
+    """Return the student's mistake notebook."""
+
+    return mistake_notebooks.get(
+        student_id,
+        [],
+    )
+
+
+# ============================================================
+# EXAM SYSTEM — 131-145
+# ============================================================
+
+def get_exam_boards() -> dict[str, str]:
+    """Return supported examination boards."""
+
+    return dict(EXAM_BOARDS)
+
+
+def create_exam(
+    student_id: str,
+    exam_board: str,
+    subject: str,
+    mode: str = "practice",
+    question_source: str = "ai_generated",
+) -> dict[str, Any]:
+    """Create an exam session."""
+
+    board = exam_board.upper()
+
+    if board not in EXAM_BOARDS:
+        raise ValueError(
+            f"Unsupported exam board: {exam_board}"
+        )
+
+    exam_id = new_id("exam")
+
+    is_ai = question_source.lower() == "ai_generated"
+
+    exam = {
+        "id": exam_id,
+        "student_id": student_id,
+        "exam_board": board,
+        "subject": subject,
+        "mode": mode,
+        "question_source": (
+            "AI-Generated Practice"
+            if is_ai
+            else "Official/Authorized"
+        ),
+        "is_ai_generated": is_ai,
+        "questions": [],
+        "answers": [],
+        "score": None,
+        "status": "created",
+        "created_at": now_iso(),
+    }
+
+    exams[exam_id] = exam
+
+    return exam
+
+
+def get_exam(
+    exam_id: str,
+) -> Optional[dict[str, Any]]:
+    """Return an exam."""
+
+    return exams.get(exam_id)
+
+
+def add_exam_question(
+    exam_id: str,
+    question: dict[str, Any],
+) -> dict[str, Any]:
+    """Add a question to an exam."""
+
+    exam = exams.get(exam_id)
+
+    if exam is None:
+        raise ValueError("Exam not found.")
+
+    exam["questions"].append(question)
+
+    return exam
+
+
+def submit_exam(
+    exam_id: str,
+    answers: list[Any],
+) -> dict[str, Any]:
+    """
+    Submit an exam.
+
+    Actual marking can be expanded when the question database
+    is connected.
+    """
+
+    exam = exams.get(exam_id)
+
+    if exam is None:
+        raise ValueError("Exam not found.")
+
+    exam["answers"] = answers
+    exam["status"] = "submitted"
+
+    return exam
+
+
+# ============================================================
+# AI QUESTION GENERATION
+# ============================================================
+
+def generate_practice_questions(
+    student_id: str,
+    subject: str,
+    topic: str,
+    count: int = 5,
+) -> dict[str, Any]:
+    """
+    Generate AI practice questions.
+
+    These are explicitly labelled as AI-generated.
+    """
+
+    request = f"""
+Create {count} practice questions.
+
+Subject: {subject}
+Topic: {topic}
+
+These must be clearly AI-generated practice questions.
+Do not claim they are official WAEC, NECO, JAMB, or BECE
+questions.
+"""
+
+    result = use_ai(
+        feature="AI Practice Generator",
+        student_id=student_id,
+        request=request,
+    )
+
+    result["question_source"] = "AI-Generated Practice"
+    result["is_official"] = False
+
+    return result
+
+
+# ============================================================
+# GAMES & BATTLES — 146-155
+# ============================================================
+
+GAME_TYPES = [
+    "Math Death Match",
+    "English Speed",
+    "Science Catastrophe",
+    "Flashcard War",
+    "STEM Competitions",
+    "Art Merge",
+    "Business Badge",
+    "Battle Arena",
+    "Challenge Mode",
+    "Competition Rooms",
+]
+
+
+def create_game(
+    student_id: str,
+    game_type: str,
+) -> dict[str, Any]:
+    """Create a Learn It game session."""
+
+    if game_type not in GAME_TYPES:
+        raise ValueError(
+            f"Unknown game type: {game_type}"
+        )
+
+    game_id = new_id("game")
+
+    game = {
+        "id": game_id,
+        "student_id": student_id,
+        "type": game_type,
+        "status": "waiting",
+        "score": 0,
+        "created_at": now_iso(),
+    }
+
+    games[game_id] = game
+
+    return game
+
+
+def create_ai_challenge(
+    student_id: str,
+    game_type: str,
+) -> dict[str, Any]:
+    """Create an AI-powered challenge."""
+
+    return use_ai(
+        feature="AI Challenge Generator",
+        student_id=student_id,
+        request=(
+            f"Create an educational challenge for "
+            f"{game_type}."
+        ),
+    )
+
+
+# ============================================================
+# PROGRESS & REWARDS — 156-170
+# ============================================================
+
+def award_xp(
+    student_id: str,
+    amount: int,
+) -> dict[str, Any]:
+    """Award XP and update the student's level."""
+
+    student = get_student(student_id)
+
+    if student is None:
+        raise ValueError("Student not found.")
+
+    amount = max(0, int(amount))
+
+    student["xp"] += amount
+
+    student["level"] = (
+        student["xp"] // 100
+    ) + 1
+
+    student["updated_at"] = now_iso()
+
+    return student
+
+
+def award_coins(
+    student_id: str,
+    amount: int,
+) -> dict[str, Any]:
+    """Award Learn It coins."""
+
+    student = get_student(student_id)
+
+    if student is None:
+        raise ValueError("Student not found.")
+
+    student["coins"] += max(
+        0,
+        int(amount),
+    )
+
+    student["updated_at"] = now_iso()
+
+    return student
+
+
+def get_progress_dashboard(
+    student_id: str,
+) -> dict[str, Any]:
+    """Return the overall progress dashboard."""
+
+    student = get_student(student_id)
+
+    if student is None:
+        raise ValueError("Student not found.")
+
+    sessions = [
+        session
+        for session in study_sessions.values()
+        if session["student_id"] == student_id
+    ]
+
+    completed_sessions = [
+        session
+        for session in sessions
+        if session["status"] == "completed"
+    ]
+
+    return {
+        "student": student,
+        "xp": student["xp"],
+        "coins": student["coins"],
+        "level": student["level"],
+        "streak": student["streak"],
+        "study_sessions": len(sessions),
+        "completed_sessions": len(
+            completed_sessions
+        ),
+        "subject_statistics": {},
+        "topic_mastery": {},
+        "achievements": [],
+        "badges": [],
+        "rewards": [],
+    }
+
+
+# ============================================================
+# FEATURE REGISTRY
+# ============================================================
+
+def get_all_features() -> list[dict[str, Any]]:
+    """
+    Return all 170 capabilities.
+
+    AI capabilities come from ai_engine.py.
+    Platform capabilities are explicitly registered here.
+    """
+
+    features = []
+
+    for feature_id in range(1, TOTAL_FEATURES + 1):
+
+        if feature_id in FEATURES:
+            name = FEATURES[feature_id]
+        elif feature_id in PLATFORM_FEATURES:
+            name = PLATFORM_FEATURES[feature_id]
+        else:
+            name = f"Learn It Feature {feature_id}"
+
+        features.append(
+            {
+                "id": feature_id,
+                "name": name,
+                "type": (
+                    "ai"
+                    if feature_id <= 95
+                    else "platform"
+                ),
+            }
+        )
+
+    return features
+
+
+def get_feature(
+    feature_id: int,
+) -> dict[str, Any]:
+    """Return one Learn It feature."""
+
+    if not 1 <= feature_id <= TOTAL_FEATURES:
+        raise ValueError(
+            f"Feature ID must be between 1 and {TOTAL_FEATURES}."
+        )
+
+    if feature_id in FEATURES:
+        name = FEATURES[feature_id]
+        feature_type = "ai"
+    else:
+        name = PLATFORM_FEATURES.get(
+            feature_id,
+            f"Learn It Feature {feature_id}",
+        )
+        feature_type = "platform"
+
+    return {
+        "id": feature_id,
+        "name": name,
+        "type": feature_type,
+    }
+
+
+# ============================================================
+# ENGINE STATUS
+# ============================================================
+
+def engine_status() -> dict[str, Any]:
+    """Return the complete Learn It engine status."""
+
+    return {
+        "engine": ENGINE_NAME,
+        "version": ENGINE_VERSION,
+        "status": "ready",
+        "total_features": TOTAL_FEATURES,
+        "ai_features": 95,
+        "platform_features": 75,
+        "ai_engine": ai_engine_status(),
+    }
+
+
+def health_check() -> dict[str, Any]:
+    """Return a complete health check."""
+
+    ai_status = ai_health_check()
+
+    return {
+        "healthy": bool(
+            ai_status.get("healthy")
+        ),
+        "engine": ENGINE_NAME,
+        "total_features": TOTAL_FEATURES,
+        "ai_engine": ai_status,
+    }
+
+
+# ============================================================
+# DEVELOPMENT VALIDATION
+# ============================================================
+
+def validate_engine() -> dict[str, Any]:
+    """Validate the complete 170-feature architecture."""
+
+    all_features = get_all_features()
+
+    ids = [
+        feature["id"]
+        for feature in all_features
+    ]
+
+    names = [
+        feature["name"]
+        for feature in all_features
+    ]
+
+    return {
+        "valid": (
+            len(all_features) == 170
+            and len(set(ids)) == 170
+            and len(set(names)) == 170
+        ),
+        "total_features": len(all_features),
+        "unique_ids": len(set(ids)),
+        "unique_names": len(set(names)),
+        "ai_features": len(AI_FEATURES),
+        "platform_features": len(PLATFORM_FEATURES),
+}    "GEMINI_MODEL",
     "gemini-3.7-flash",
 )
 
