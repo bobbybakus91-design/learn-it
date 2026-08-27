@@ -138,7 +138,7 @@ GEMINI_MODEL = "gemini-3.7-flash"
 # ============================================================
 
 def get_client():
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv(AQ.Ab8RN6Iy423fCNeEfm9S_F-EF-xanDIjhpS2T_8ATrES1LeNUw)
 
     if not api_key:
         raise RuntimeError(
