@@ -1,40 +1,139 @@
-# ============================================================
-# LEARN IT — CORE ENGINE
-# ============================================================
-# Non-AI core engine for Learn It.
-#
-# Works with:
-#     ai_engine.py
-#
-# The complete Learn It specification contains 170 capabilities.
-#
-# AI capabilities:
-#     1-95
-#
-# Core/platform systems:
-#     96-170
-#
-# This engine provides the data/state foundation for:
-#     - Study Session Hub
-#     - Study System
-#     - Exam System
-#     - Games & Battles
-#     - Progress & Rewards
-#     - Student profiles
-#     - Past-question source labels
-# ============================================================
+"""
+Learn It — Core Engine Module (Capabilities 96-170)
+Handles session management, non-AI platform mechanisms, gamification, and exam records.
+"""
 
-from __future__ import annotations
+import time
+import uuid
+from typing import Dict, List, Any, Optional
 
-from datetime import datetime, timezone
-from typing import Any, Optional
-from uuid import uuid4
+class LearnItEngine:
+    def __init__(self):
+        # In-Memory Datastores (Production systems replace this with DB connections)
+        self.students: Dict[str, Dict[str, Any]] = {}
+        self.study_sessions: Dict[str, Dict[str, Any]] = {}
+        self.official_past_questions_db: List[Dict[str, Any]] = self._seed_official_questions()
+        
+    def _seed_official_questions(self) -> List[Dict[str, Any]]:
+        """Populates authentic past question database (Capabilities 131-136, 138)."""
+        return [
+            {
+                "id": "WAEC-2022-MATH-Q01",
+                "exam_category": "WAEC",
+                "year": 2022,
+                "subject": "Mathematics",
+                "topic": "Algebra",
+                "question_text": "If 3p + 2q = 12 and p - q = 1, find the value of p.",
+                "options": ["A) 2", "B) 2.8", "C) 3", "D) 4"],
+                "correct_option": "B) 2.8",
+                "is_official": True,
+                "label": "OFFICIAL WAEC PAST QUESTION",
+                "disclaimer": "OFFICIAL QUESTION: Sourced from West African Examinations Council past paper archive."
+            },
+            {
+                "id": "JAMB-2023-ENG-Q14",
+                "exam_category": "JAMB",
+                "year": 2023,
+                "subject": "English Language",
+                "topic": "Antonyms",
+                "question_text": "Select the option opposite in meaning to 'ephemeral'.",
+                "options": ["A) Transient", "B) Perpetual", "C) Fragile", "D) Elusive"],
+                "correct_option": "B) Perpetual",
+                "is_official": True,
+                "label": "OFFICIAL JAMB PAST QUESTION",
+                "disclaimer": "OFFICIAL QUESTION: Sourced from Joint Admissions and Matriculation Board archives."
+            }
+        ]
 
-from ai_engine import (
-    AI_FEATURES,
-    FEATURES,
-    FEATURE_IDS,
-    run_ai,
+    # --- Student Profile Management ---
+    def get_or_create_student(self, student_id: str, name: str = "Learner") -> Dict[str, Any]:
+        if student_id not in self.students:
+            self.students[student_id] = {
+                "id": student_id,
+                "name": name,
+                "grade": "SS2",
+                "curriculum": "Nigerian National Curriculum",
+                "xp": 0,
+                "coins": 50,
+                "level": 1,
+                "streak_days": 1,
+                "avatar": "default_scholar",
+                "saved_questions": [],
+                "mistake_notebook": [],
+                "personal_notes": [],
+                "mastery_matrix": {},
+                "achievements": []
+            }
+        return self.students[student_id]
+
+    # --- 96-115: Study Session Hub ---
+    def start_study_session(self, student_id: str, session_type: str, subject: str, topic: str, goal_minutes: int = 25) -> Dict[str, Any]:
+        session_id = f"sess_{uuid.uuid4().hex[:8]}"
+        session_data = {
+            "session_id": session_id,
+            "student_id": student_id,
+            "session_type": session_type, # Quick, Deep, Quiet, AI Tutor, AI Classroom, Timed Exam
+            "subject": subject,
+            "topic": topic,
+            "start_time": time.time(),
+            "goal_minutes": goal_minutes,
+            "status": "ACTIVE",
+            "logs": [],
+            "performance_score": 0.0
+        }
+        self.study_sessions[session_id] = session_data
+        return session_data
+
+    def end_study_session(self, session_id: str, performance_score: float = 0.8) -> Dict[str, Any]:
+        session = self.study_sessions.get(session_id)
+        if not session:
+            raise ValueError("Session ID not found.")
+        
+        session["status"] = "COMPLETED"
+        session["end_time"] = time.time()
+        session["duration_seconds"] = int(session["end_time"] - session["start_time"])
+        session["performance_score"] = performance_score
+        
+        # --- 156-170: Progress & Gamification Rewards Processing ---
+        student = self.students[session["student_id"]]
+        earned_xp = int((session["duration_seconds"] / 60) * 10 * performance_score) + 50
+        earned_coins = int(earned_xp / 5)
+        
+        student["xp"] += earned_xp
+        student["coins"] += earned_coins
+        student["level"] = 1 + (student["xp"] // 500)
+        
+        return {
+            "session_summary": session,
+            "rewards": {
+                "earned_xp": earned_xp,
+                "earned_coins": earned_coins,
+                "total_xp": student["xp"],
+                "total_coins": student["coins"],
+                "current_level": student["level"]
+            }
+        }
+
+    # --- 131-145: Official Exam System ---
+    def get_official_past_questions(self, exam_category: str, subject: str) -> List[Dict[str, Any]]:
+        """Retrieves verified official questions, strictly marked as non-AI."""
+        return [
+            q for q in self.official_past_questions_db 
+            if q["exam_category"].upper() == exam_category.upper() and q["subject"].lower() == subject.lower()
+        ]
+
+    # --- 146-155: Games & Battles Arena ---
+    def record_game_battle(self, student_id: str, game_mode: str, score: int, opponent: str = "AI_Opponent") -> Dict[str, Any]:
+        student = self.get_or_create_student(student_id)
+        xp_gained = score * 2
+        student["xp"] += xp_gained
+        return {
+            "game_mode": game_mode,
+            "score": score,
+            "opponent": opponent,
+            "xp_reward": xp_gained,
+            "status": "VICTORY" if score > 50 else "DEFEAT"
+                            }    run_ai,
     ai_engine_status,
     health_check as ai_health_check,
 )
