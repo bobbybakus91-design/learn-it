@@ -1,40 +1,118 @@
-# ============================================================
-# LEARN IT — MAIN API
-# ============================================================
+"""
+Learn It — Main API Layer & System Controller (main.py)
+Unifies Core Engine (96-170) and AI Engine (1-95) into a robust service.
+"""
 
-from __future__ import annotations
+from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
 
-from typing import Any, Optional
-
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
-
-import learn_it_engine
-
-
-# ============================================================
-# APP
-# ============================================================
+from learn_it_engine import LearnItEngine
+from ai_engine import AIEngine, GeminiProvider
 
 app = FastAPI(
-    title="Learn It API",
-    description="Learn It educational platform API",
+    title="Learn It Unified Educational Platform Engine",
     version="1.0.0",
+    description="Backend service integrating 170 modular capabilities for the Learn It learning environment."
 )
 
+# Initialize Engine Singletons
+core_engine = LearnItEngine()
+ai_provider = GeminiProvider()
+ai_engine = AIEngine(provider=ai_provider)
 
-# ============================================================
-# REQUEST MODELS
-# ============================================================
+# --- Pydantic Request Schemas ---
+class StudentInitRequest(BaseModel):
+    student_id: str
+    name: str
 
-class StudentCreate(BaseModel):
-    name: str = "Student"
-    grade: str = "JSS3"
-    curriculum: str = "Nigerian"
-    pathway: str = "General"
+class StartSessionRequest(BaseModel):
+    student_id: str
+    session_type: str
+    subject: str
+    topic: str
+    goal_minutes: int = 25
 
+class EndSessionRequest(BaseModel):
+    session_id: str
+    performance_score: float = 0.85
 
-class StudentUpdate(BaseModel):
+class PracticeQuizRequest(BaseModel):
+    subject: str
+    topic: str
+    difficulty: str = "medium"
+    count: int = 5
+
+class GamePlayRequest(BaseModel):
+    student_id: str
+    game_mode: str
+    score: int
+    opponent: str = "AI_Opponent"
+
+# --- API Endpoints ---
+
+@app.get("/")
+def health_check():
+    return {"status": "ONLINE", "system": "Learn It Unified Platform", "capabilities_loaded": 170}
+
+# --- Core Platform & Student State (96-130, 156-170) ---
+@app.post("/api/v1/student/init")
+def initialize_student(req: StudentInitRequest):
+    return core_engine.get_or_create_student(req.student_id, req.name)
+
+@app.post("/api/v1/session/start")
+def start_session(req: StartSessionRequest):
+    return core_engine.start_study_session(
+        req.student_id, req.session_type, req.subject, req.topic, req.goal_minutes
+    )
+
+@app.post("/api/v1/session/end")
+def end_session(req: EndSessionRequest):
+    try:
+        return core_engine.end_study_session(req.session_id, req.performance_score)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+# --- AI Core & Personalized Services (1-40) ---
+@app.get("/api/v1/ai/lesson")
+def get_ai_lesson(subject: str, topic: str, style: str = "encouraging", depth: str = "standard"):
+    return ai_engine.generate_lesson(subject, topic, style, depth)
+
+@app.post("/api/v1/ai/recommendations")
+def get_ai_recommendations(student_id: str):
+    student = core_engine.get_or_create_student(student_id)
+    return ai_engine.analyze_performance_and_adapt(student, session_history=[])
+
+# --- AI Practice Quiz vs Official Exams System (41-50, 131-145) ---
+@app.post("/api/v1/assessment/generate-practice")
+def generate_ai_practice_quiz(req: PracticeQuizRequest):
+    """Generates AI practice questions with strict non-official disclaimers."""
+    return ai_engine.generate_practice_quiz(req.subject, req.topic, req.difficulty, req.count)
+
+@app.get("/api/v1/assessment/official-past-questions")
+def get_official_past_questions(exam_category: str, subject: str):
+    """Retrieves verified official exam board questions (WAEC/NECO/JAMB/BECE)."""
+    questions = core_engine.get_official_past_questions(exam_category, subject)
+    if not questions:
+        raise HTTPException(
+            status_code=404, 
+            detail=f"No official past questions loaded for {exam_category} - {subject}"
+        )
+    return {"exam_category": exam_category, "count": len(questions), "questions": questions}
+
+# --- AI Classroom Subsystem (81-95) ---
+@app.get("/api/v1/ai-classroom/step")
+def run_ai_classroom(lesson_id: str, current_step: int, query: Optional[str] = None):
+    return ai_engine.run_classroom_step(lesson_id, current_step, student_query=query)
+
+# --- Gamified Battles & Games (56-65, 146-155) ---
+@app.post("/api/v1/games/play")
+def record_game(req: GamePlayRequest):
+    return core_engine.record_game_battle(req.student_id, req.game_mode, req.score, req.opponent)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)class StudentUpdate(BaseModel):
     updates: dict[str, Any]
 
 
